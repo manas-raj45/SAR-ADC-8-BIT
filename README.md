@@ -1,9 +1,7 @@
 # 8-Bit SAR ADC Design in 90nm CMOS
 
 ## Overview
-Welcome to my custom 8-bit Successive Approximation Register (SAR) ADC project! I designed this mixed-signal front-end entirely from the transistor level up using Cadence Virtuoso (gpdk090 process). 
-
-My goal with this project wasn't just to get a working simulation, but to deeply understand and neutralize the real-world physical non-idealities of silicon—like charge injection, kickback noise, and common-mode collapse. The result is a highly efficient, low-power ADC optimized for edge devices and hardware accelerator interfaces.
+This repository contains the transistor-level design and verification of an 8-bit Successive Approximation Register (SAR) Analog-to-Digital Converter (ADC). Designed in Cadence Virtuoso using the gpdk090 (90nm) process, the project focuses on addressing non-ideal silicon effects such as charge injection, kickback noise, and common-mode variations to achieve a power-efficient mixed-signal front-end.
 
 ## Key Performance Specs
 * **Resolution:** 8 Bits (6.9 ENOB Nominal)
@@ -14,10 +12,10 @@ My goal with this project wasn't just to get a working simulation, but to deeply
 
 ---
 
-## The Math Behind the Metrics
+## Design Calculations
 
-### 1. Coherent Input Frequency Calculation
-To get an accurate FFT spectrum and prevent spectral leakage during testing, I calculated a strict coherent input frequency using the formula: 
+### 1. Coherent Input Frequency
+To ensure an accurate FFT spectrum and prevent spectral leakage, the coherent input frequency was calculated using:
 `fin = (M / N) * fs`
 
 * **fs (Sampling Frequency):** 2 MHz
@@ -26,47 +24,45 @@ To get an accurate FFT spectrum and prevent spectral leakage during testing, I c
 
 **Calculation:**
 `fin = (11 / 512) * 2,000,000 = 42,968.75 Hz`
-By driving the analog input at exactly 42.97 kHz, the FFT captures perfect, non-overlapping bins.
+Driving the analog input at exactly 42.97 kHz ensures the FFT captures non-overlapping bins.
 
 ### 2. Power & Figure of Merit (FoM)
-The Walden FoM measures how much energy the ADC burns to resolve a single digital bit. A lower number means a more efficient design. 
+The Walden FoM measures the energy consumed per conversion step.
 `FoM = Average Power / (fs * 2^ENOB)`
 
-* **Average Power:** 40.98 uW
+* **Average Power:** 40.98 µW
 * **fs:** 2 MHz
 * **ENOB:** 6.9
 
 **Calculation:**
-`FoM = 40.98uW / (2,000,000 * 119.43)`
-`FoM = 171.6 fJ/conv-step`
-Breaking below the 200 fJ barrier proves the CDAC and comparator sizing is tight and highly power-efficient.
+`FoM = 40.98µW / (2,000,000 * 119.43) = 171.6 fJ/conv-step`
+A FoM of 171.6 fJ/conv-step demonstrates an efficient CDAC and comparator sizing strategy.
 
 ---
 
-## Architecture & Design Choices
-I built this architecture specifically to tackle real-world silicon limitations:
-* **Bootstrapped Switch:** Used for the sample-and-hold circuit to maintain a constant Vgs. This eliminates signal-dependent ON-resistance and minimizes charge injection.
-* **CDAC Array:** A single-ended Binary-Weighted Charge Redistribution DAC, physically balanced against a 2.56pF sampling capacitor to absorb kickback noise.
-* **StrongARM Latch:** An NMOS-input comparator optimized for a 50ns clock constraint, featuring a custom-sized regenerative core to rapidly resolve microscopic 7mV LSBs.
-* **Digital Control:** A custom Verilog-A Finite State Machine (FSM) driving the binary search algorithm.
+## Architecture Details
+Key design implementations include:
+* **Bootstrapped Switch:** Used in the sample-and-hold circuit to maintain a constant Vgs. This minimizes signal-dependent ON-resistance and charge injection.
+* **CDAC Array:** A single-ended Binary-Weighted Charge Redistribution DAC, scaled and balanced against a 2.56pF sampling capacitor to absorb kickback noise.
+* **StrongARM Latch:** An NMOS-input comparator optimized for a 50ns clock constraint, with a custom-sized regenerative core for accurate resolution of 7mV LSBs.
+* **Digital Control:** A Verilog-A Finite State Machine (FSM) implementing the binary search algorithm.
 
 ---
 
-## The Debugging Journey & Physical Solutions
-This project was a massive exercise in transistor-level troubleshooting. Here is how I pushed the design from an initial 3.3 ENOB up to its theoretical limit.
+## Design Challenges & Solutions
 
-### Overcoming Common-Mode Collapse
-**The Problem Statement:** Initial simulations capped the ADC at ~6.1 ENOB. The digital tracking suffered severe distortion specifically at the lowest input voltages. I diagnosed that the NMOS input differential pair of the StrongARM latch was starving for current and physically shutting off when the analog signal dropped below the ~400mV threshold voltage.
-**The Debugging Solution:** I applied a strict 1.0V DC offset with a 0.6V amplitude to the input signal. By shifting the swing from 0.4V to 1.6V, I guaranteed the comparator remained actively biased throughout the entire conversion phase. This instantly cured the SR Latch metastability and restored the digital staircase.
+### Common-Mode Collapse
+* **Issue:** Initial simulations yielded ~6.1 ENOB with distortion at lower input voltages. The NMOS input differential pair of the StrongARM latch entered the subthreshold region when the analog signal dropped below ~400mV.
+* **Solution:** Applied a 1.0V DC offset with a 0.6V amplitude to the input signal (0.4V to 1.6V swing). This ensured the comparator remained actively biased throughout the conversion phase, preventing SR Latch metastability and restoring digital tracking.
 
-### Neutralizing Kickback Noise
-**The Problem Statement:** Early iterations suffered from massive, destructive voltage spikes on the analog input pins the moment the StrongARM latch evaluated.
-**The Debugging Solution:** I mathematically matched the total capacitive weight of the CDAC array to the C0 sample-and-hold capacitor. This provided a perfectly balanced, heavy electrical load to absorb the comparator kickback without distorting the sensitive sampled voltage.
+### Kickback Noise Mitigation
+* **Issue:** Evaluation of the StrongARM latch caused significant kickback noise on the analog input pins.
+* **Solution:** Sized the total capacitive weight of the CDAC array to match the C0 sample-and-hold capacitor. This balanced the load, absorbing the comparator kickback without altering the sampled voltage.
 
-### PVT Corner Robustness
-To prove this design could survive commercial operating conditions, I subjected it to strict Process, Voltage, and Temperature (PVT) corner analysis:
-* **Worst-Case Corner (85°C, 1.62V Supply):** Maintained **6.41 ENOB**. The ADC successfully survived high thermal noise and starved overdrive voltages without stalling.
-* **Best-Case Corner (-40°C, 1.98V Supply):** Peaked at **7.1 ENOB**. 
+### PVT Corner Analysis
+The design was verified across Process, Voltage, and Temperature (PVT) corners to confirm robustness:
+* **Worst-Case Corner (85°C, 1.62V Supply):** Maintained **6.41 ENOB**.
+* **Best-Case Corner (-40°C, 1.98V Supply):** Achieved **7.1 ENOB**.
 
 ---
 
