@@ -1,0 +1,49 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module register_8bit(clk, in, out);
+    input clk;
+    input [7:0] in;
+    output [7:0] out;
+    
+    electrical clk;
+    electrical [7:0] in, out;
+
+    parameter real VTH = 0.9;
+    parameter real VDD = 1.8;
+    parameter real trise = 10p;
+    parameter real tfall = 10p;
+    parameter real tdel = 10p;
+
+    real latched_val[7:0];
+
+    analog begin
+        
+        @(initial_step) begin
+            latched_val[7] = 0.0; latched_val[6] = 0.0; latched_val[5] = 0.0; latched_val[4] = 0.0;
+            latched_val[3] = 0.0; latched_val[2] = 0.0; latched_val[1] = 0.0; latched_val[0] = 0.0;
+        end
+
+        
+        @(cross(V(clk) - VTH, +1)) begin
+            latched_val[7] = (V(in[7]) > VTH) ? VDD : 0.0;
+            latched_val[6] = (V(in[6]) > VTH) ? VDD : 0.0;
+            latched_val[5] = (V(in[5]) > VTH) ? VDD : 0.0;
+            latched_val[4] = (V(in[4]) > VTH) ? VDD : 0.0;
+            latched_val[3] = (V(in[3]) > VTH) ? VDD : 0.0;
+            latched_val[2] = (V(in[2]) > VTH) ? VDD : 0.0;
+            latched_val[1] = (V(in[1]) > VTH) ? VDD : 0.0;
+            latched_val[0] = (V(in[0]) > VTH) ? VDD : 0.0;
+        end
+
+       
+        V(out[7]) <+ transition(latched_val[7], tdel, trise, tfall);
+        V(out[6]) <+ transition(latched_val[6], tdel, trise, tfall);
+        V(out[5]) <+ transition(latched_val[5], tdel, trise, tfall);
+        V(out[4]) <+ transition(latched_val[4], tdel, trise, tfall);
+        V(out[3]) <+ transition(latched_val[3], tdel, trise, tfall);
+        V(out[2]) <+ transition(latched_val[2], tdel, trise, tfall);
+        V(out[1]) <+ transition(latched_val[1], tdel, trise, tfall);
+        V(out[0]) <+ transition(latched_val[0], tdel, trise, tfall);
+    end
+endmodule
