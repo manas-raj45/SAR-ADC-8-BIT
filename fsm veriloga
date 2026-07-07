@@ -1,0 +1,124 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module fsm_assignment(clk, rst_n, cmp_out, sample, done, dac_out);
+
+    input clk, rst_n, cmp_out;
+    output sample, done;
+    output [7:0] dac_out;
+
+    electrical clk, rst_n, cmp_out, sample, done;
+    electrical [7:0] dac_out;
+
+    parameter real VDD = 1.8;
+    parameter real VTH = 0.9;
+    parameter real trise = 10p;
+    parameter real tfall = 10p;
+    parameter real tdel = 10p;
+
+    integer sar_counter;
+    integer dac_reg[7:0];
+    real sample_val;
+    real done_val;
+
+    analog begin
+        @(initial_step) begin
+            sar_counter = 9;
+            sample_val = VDD;
+            done_val = 0.0;
+            dac_reg[7] = 0; dac_reg[6] = 0; dac_reg[5] = 0; dac_reg[4] = 0;
+            dac_reg[3] = 0; dac_reg[2] = 0; dac_reg[1] = 0; dac_reg[0] = 0;
+        end
+
+        
+        @(cross(V(clk) - VTH, +1) or cross(V(rst_n) - VTH, -1)) begin
+            
+            if (V(rst_n) < VTH) begin
+                sar_counter = 9;
+                sample_val = VDD; 
+                done_val = 0.0;
+                dac_reg[7] = 0; dac_reg[6] = 0; dac_reg[5] = 0; dac_reg[4] = 0;
+                dac_reg[3] = 0; dac_reg[2] = 0; dac_reg[1] = 0; dac_reg[0] = 0;
+            end 
+            else begin
+                if (sar_counter == 9) begin
+                    // Start of conversion: Close switch, drop DONE, wipe DAC memory safely
+                    sample_val = VDD; 
+                    done_val = 0.0;
+                    dac_reg[7] = 0; dac_reg[6] = 0; dac_reg[5] = 0; dac_reg[4] = 0;
+                    dac_reg[3] = 0; dac_reg[2] = 0; dac_reg[1] = 0; dac_reg[0] = 0;
+                    sar_counter = 8;
+                end 
+                else if (sar_counter == 8) begin
+                    dac_reg[7] = 1; 
+                    sar_counter = 7;
+                end 
+                else if (sar_counter == 7) begin
+                    dac_reg[7] = (V(cmp_out) > VTH) ? 1 : 0; 
+                    dac_reg[6] = 1; 
+                    sar_counter = 6;
+                end 
+                else if (sar_counter == 6) begin
+                    dac_reg[6] = (V(cmp_out) > VTH) ? 1 : 0; 
+                    dac_reg[5] = 1; 
+                    sar_counter = 5;
+                end 
+                else if (sar_counter == 5) begin
+                    dac_reg[5] = (V(cmp_out) > VTH) ? 1 : 0; 
+                    dac_reg[4] = 1; 
+                    sar_counter = 4;
+                end 
+                else if (sar_counter == 4) begin
+                    dac_reg[4] = (V(cmp_out) > VTH) ? 1 : 0; 
+                    dac_reg[3] = 1; 
+                    sar_counter = 3;
+                end 
+                else if (sar_counter == 3) begin
+                    dac_reg[3] = (V(cmp_out) > VTH) ? 1 : 0; 
+                    dac_reg[2] = 1; 
+                    sar_counter = 2;
+                end 
+                else if (sar_counter == 2) begin
+                    dac_reg[2] = (V(cmp_out) > VTH) ? 1 : 0; 
+                    dac_reg[1] = 1; 
+                    sar_counter = 1;
+                end 
+                else if (sar_counter == 1) begin
+                    dac_reg[1] = (V(cmp_out) > VTH) ? 1 : 0; 
+                    dac_reg[0] = 1; 
+                    sar_counter = 0;
+                end 
+                else if (sar_counter == 0) begin
+                    // Final bit evaluated. Data is now mathematically solid.
+                    dac_reg[0] = (V(cmp_out) > VTH) ? 1 : 0; 
+                    sar_counter = 9;
+                end
+            end
+        end
+
+      
+        @(cross(V(clk) - VTH, -1)) begin
+             
+            if (sar_counter == 8) begin
+                sample_val = 0.0; 
+            end
+            
+            if (sar_counter == 9) begin
+                done_val = VDD; 
+            end
+        end
+
+      
+        V(sample) <+ transition(sample_val, tdel, trise, tfall);
+        V(done)   <+ transition(done_val, tdel, trise, tfall);
+        
+        V(dac_out[7]) <+ transition(dac_reg[7] ? VDD : 0.0, tdel, trise, tfall);
+        V(dac_out[6]) <+ transition(dac_reg[6] ? VDD : 0.0, tdel, trise, tfall);
+        V(dac_out[5]) <+ transition(dac_reg[5] ? VDD : 0.0, tdel, trise, tfall);
+        V(dac_out[4]) <+ transition(dac_reg[4] ? VDD : 0.0, tdel, trise, tfall);
+        V(dac_out[3]) <+ transition(dac_reg[3] ? VDD : 0.0, tdel, trise, tfall);
+        V(dac_out[2]) <+ transition(dac_reg[2] ? VDD : 0.0, tdel, trise, tfall);
+        V(dac_out[1]) <+ transition(dac_reg[1] ? VDD : 0.0, tdel, trise, tfall);
+        V(dac_out[0]) <+ transition(dac_reg[0] ? VDD : 0.0, tdel, trise, tfall);
+    end
+endmodule
